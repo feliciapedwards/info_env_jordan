@@ -1,0 +1,193 @@
+version: 2
+
+models:
+  - name: theme_labor_employment
+    description: |
+      Monthly labor & employment theme features for policy analysis.
+      
+      **Policy Questions:**
+      - Should Jordan raise minimum wages?
+      - Are labor subsidies effective?
+      - Is unemployment worsening?
+      
+      **Hypothesis:** Labor protests + unemployment searches predict unemployment 1-3 months ahead.
+      
+      **Grain:** One row per month (country-level)
+    
+    columns:
+      - name: event_month
+        description: Month (YYYY-MM-01), primary key
+        tests:
+          - not_null
+          - unique
+      
+      - name: theme
+        description: Theme label ('labor_employment')
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['labor_employment']
+      
+      - name: total_labor_events
+        description: Count of labor-related events this month
+        tests:
+          - not_null
+      
+      - name: avg_unemployment_search
+        description: Average Google Trends score for 'unemployment' searches (0-100)
+      
+      - name: unemployment_rate
+        description: TARGET - Unemployment rate (%) from World Bank
+      
+      - name: labor_events_lag1
+        description: Labor events from 1 month ago (for predictive modeling)
+      
+      - name: labor_events_3mo_avg
+        description: 3-month rolling average of labor events (smoothed)
+
+  - name: theme_economic_conditions
+    description: |
+      Monthly economic conditions theme features for policy analysis.
+      
+      **Policy Questions:**
+      - Should Jordan remove fuel subsidies?
+      - Will inflation worsen?
+      - What's the impact of subsidy cuts?
+      
+      **Hypothesis:** Economic protests + inflation searches predict inflation 1-3 months ahead.
+      
+      **Grain:** One row per month (country-level)
+    
+    columns:
+      - name: event_month
+        description: Month (YYYY-MM-01), primary key
+        tests:
+          - not_null
+          - unique
+      
+      - name: theme
+        description: Theme label ('economic_conditions')
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['economic_conditions']
+      
+      - name: total_economic_events
+        description: Count of economic grievance events this month
+        tests:
+          - not_null
+      
+      - name: avg_inflation_search
+        description: Average Google Trends score for 'inflation' searches (0-100)
+      
+      - name: inflation_rate
+        description: TARGET - Inflation rate (%) from World Bank
+
+  - name: ml_combined_economic_themes
+    description: |
+      **PRIMARY TABLE FOR ECONOMIC PREDICTION AND POLICY ANALYSIS**
+      
+      Combines labor/employment + economic conditions themes into unified monthly dataset.
+      
+      **USE CASES:**
+      - Correlation analysis: events + searches → unemployment + inflation
+      - Lag analysis: Do events lead economic changes by 1-3 months?
+      - Predictive modeling: Train ML models to forecast economic outcomes
+      - Policy impact: Measure effectiveness of interventions
+      - Early warning dashboard: Real-time alerts when indicators spike
+      
+      **EXCLUDES:** Political stability and regional/identity themes (no economic correlation)
+      
+      **Grain:** One row per month (country-level)
+      **Target Variables:** unemployment_rate, inflation_rate, gdp_growth_rate
+    
+    tests:
+      - dbt_utils.recency:
+          datepart: month
+          field: event_month
+          interval: 3
+          config:
+            severity: warn
+    
+    columns:
+      - name: event_month
+        description: Month (YYYY-MM-01), primary key
+        tests:
+          - not_null
+          - unique
+      
+      # LABOR PREDICTORS
+      - name: total_labor_events
+        description: Count of labor protests this month
+        tests:
+          - not_null
+      
+      - name: avg_unemployment_search
+        description: Avg Google Trends score for unemployment searches
+      
+      - name: labor_events_lag1
+        description: Labor events 1 month ago (predictive feature)
+      
+      - name: labor_events_lag2
+        description: Labor events 2 months ago (predictive feature)
+      
+      - name: labor_events_lag3
+        description: Labor events 3 months ago (predictive feature)
+      
+      # ECONOMIC PREDICTORS
+      - name: total_economic_events
+        description: Count of economic grievance protests this month
+        tests:
+          - not_null
+      
+      - name: avg_inflation_search
+        description: Avg Google Trends score for inflation searches
+      
+      - name: economic_events_lag1
+        description: Economic events 1 month ago (predictive feature)
+      
+      # COMBINED FEATURES
+      - name: total_distress_events
+        description: Labor + economic events combined (overall distress signal)
+        tests:
+          - not_null
+      
+      - name: combined_search_intensity
+        description: Unemployment + inflation searches combined
+      
+      - name: violence_ratio
+        description: Violent events / total events (intensity measure)
+        tests:
+          - not_null
+      
+      - name: high_alert_flag
+        description: Binary alert when both events AND searches spike (crisis signal)
+        tests:
+          - not_null
+          - accepted_values:
+              values: [0, 1]
+      
+      # TARGET VARIABLES
+      - name: target_unemployment_rate
+        description: TARGET - Unemployment rate (%) to predict
+      
+      - name: target_inflation_rate
+        description: TARGET - Inflation rate (%) to predict
+      
+      - name: target_gdp_growth
+        description: TARGET - GDP growth rate (%) to predict
+      
+      # TIME FEATURES
+      - name: month_num
+        description: Month number (1-12) for seasonality analysis
+        tests:
+          - not_null
+          - accepted_values:
+              values: [1,2,3,4,5,6,7,8,9,10,11,12]
+      
+      - name: quarter_num
+        description: Quarter number (1-4)
+        tests:
+          - not_null
+          - accepted_values:
+              values: [1,2,3,4]

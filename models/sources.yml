@@ -1,0 +1,236 @@
+version: 2
+
+sources:
+  - name: bronze
+    database: info_env_jordan
+    schema: bronze
+    description: Raw data ingested from external APIs
+    
+    # Freshness checks - alert if data is stale
+    # warn_after: data should be refreshed by this time
+    # error_after: data is critically stale
+    freshness:
+      warn_after: {count: 7, period: day}
+      error_after: {count: 14, period: day}
+    
+    tables:
+      - name: gdelt_jordan_topics
+        description: |
+          Raw GDELT topic data for Jordan media coverage.
+          Ingested from GDELT API with article counts and sentiment (avg_tone).
+        # More aggressive freshness for daily news data
+        freshness:
+          warn_after: {count: 2, period: day}
+          error_after: {count: 5, period: day}
+        loaded_at_field: article_date
+        
+        # Bronze layer tests
+        tests:
+          - dbt_utils.recency:
+              datepart: day
+              field: article_date
+              interval: 30
+          - dbt_utils.expression_is_true:
+              expression: "article_count >= 0"
+          - dbt_utils.expression_is_true:
+              expression: "avg_tone BETWEEN -10 AND 10"
+        
+        columns:
+          - name: article_date
+            description: Date of the articles (string format from API)
+            tests:
+              - not_null
+          - name: topic
+            description: Topic category from GDELT taxonomy
+            tests:
+              - not_null
+          - name: article_count
+            description: Number of articles for this topic on this date
+            tests:
+              - not_null
+          - name: avg_tone
+            description: Average sentiment tone (-10 to +10 scale)
+      
+      - name: google_trends
+        description: |
+          Raw Google Trends search data for Jordan economic keywords.
+          Ingested from Google Trends API.
+        freshness:
+          warn_after: {count: 3, period: day}
+          error_after: {count: 7, period: day}
+        loaded_at_field: event_date
+        
+        # Bronze layer tests
+        tests:
+          - dbt_utils.recency:
+              datepart: day
+              field: event_date
+              interval: 30
+          - dbt_utils.expression_is_true:
+              expression: "trend_score >= 0 AND trend_score <= 100"
+          - dbt_utils.unique_combination_of_columns:
+              combination_of_columns:
+                - event_date
+                - search_term
+        
+        columns:
+          - name: event_date
+            description: Date of the trend data point
+            tests:
+              - not_null
+          - name: google_trends_date_label
+            description: Human-readable date label from API
+          - name: timestamp
+            description: Unix timestamp of the data point
+            tests:
+              - not_null
+          - name: search_term
+            description: Economic keyword being tracked
+            tests:
+              - not_null
+          - name: trend_score
+            description: Normalized trend score (0-100)
+            tests:
+              - not_null
+          - name: trend_value_display
+            description: Display-formatted trend value
+      
+      - name: acled_jordan_events
+        description: |
+          Raw ACLED conflict and protest event data for Jordan.
+          Ingested from ACLED API with detailed event metadata.
+        freshness:
+          warn_after: {count: 7, period: day}
+          error_after: {count: 14, period: day}
+        loaded_at_field: event_date
+        
+        # Bronze layer tests
+        tests:
+          - dbt_utils.recency:
+              datepart: day
+              field: event_date
+              interval: 90
+          - dbt_utils.expression_is_true:
+              expression: "fatalities >= 0"
+              config:
+                where: "fatalities IS NOT NULL"
+          - dbt_utils.expression_is_true:
+              expression: "latitude IS NOT NULL AND longitude IS NOT NULL"
+              config:
+                severity: warn
+        
+        columns:
+          - name: event_id_cnty
+            description: Unique event identifier
+            tests:
+              - not_null
+              - unique
+          - name: event_date
+            description: Date the event occurred (string format)
+            tests:
+              - not_null
+          - name: year
+            description: Year of the event
+            tests:
+              - not_null
+          - name: time_precision
+            description: Precision level of the event time
+          - name: disorder_type
+            description: Type of disorder (e.g., Political violence, Protests)
+            tests:
+              - not_null
+          - name: event_type
+            description: Specific event classification
+            tests:
+              - not_null
+          - name: sub_event_type
+            description: Detailed sub-classification
+          - name: actor1
+            description: Primary actor involved in the event
+          - name: assoc_actor_1
+            description: Associated actor with actor1
+          - name: inter1
+            description: Interaction code for actor1
+          - name: actor2
+            description: Secondary actor involved in the event
+          - name: assoc_actor_2
+            description: Associated actor with actor2
+          - name: inter2
+            description: Interaction code for actor2
+          - name: interaction
+            description: Overall interaction code between actors
+          - name: civilian_targeting
+            description: Indicator of civilian targeting
+          - name: iso
+            description: ISO country code
+          - name: region
+            description: Geographic region
+          - name: country
+            description: Country name
+          - name: admin1
+            description: First-level administrative division (governorate)
+            tests:
+              - not_null
+          - name: admin2
+            description: Second-level administrative division (town/district)
+          - name: admin3
+            description: Third-level administrative division
+          - name: location
+            description: Specific location name where event occurred
+          - name: latitude
+            description: Geographic latitude (string format)
+          - name: longitude
+            description: Geographic longitude (string format)
+          - name: geo_precision
+            description: Precision level of geographic coordinates
+          - name: source
+            description: Information source for the event
+          - name: source_scale
+            description: Scale/level of the source
+          - name: notes
+            description: Additional notes and context about the event
+          - name: fatalities
+            description: Number of reported fatalities
+          - name: tags
+            description: Classification tags for the event
+          - name: timestamp
+            description: Timestamp when the record was created/updated
+      
+      - name: jordan_econ_metrics_qtr
+        description: |
+          Quarterly economic indicators for Jordan (GDP growth, unemployment, inflation).
+          Covers 2005-2026 with 88 quarters of data.
+          Source: Manual data collection or external economic database.
+        freshness:
+          warn_after: {count: 90, period: day}
+          error_after: {count: 180, period: day}
+        
+        # Bronze layer tests
+        tests:
+          - dbt_utils.expression_is_true:
+              expression: "year IS NOT NULL AND quarter IS NOT NULL"
+          - dbt_utils.unique_combination_of_columns:
+              combination_of_columns:
+                - year
+                - quarter
+                - metric
+        
+        columns:
+          - name: year
+            description: Year of the economic data (string format)
+            tests:
+              - not_null
+          - name: quarter
+            description: Quarter (Q1, Q2, Q3, Q4)
+            tests:
+              - not_null
+              - accepted_values:
+                  values: ['Q1', 'Q2', 'Q3', 'Q4']
+          - name: metric
+            description: Economic indicator name
+            tests:
+              - not_null
+              - accepted_values:
+                  values: ['gdp_growth', 'unemployment', 'youth_unemployment', 'inflation_avg_qtr']
+          - name: value
+            description: Metric value (string format, can be NULL for future periods)

@@ -1,0 +1,32 @@
+name: 'jordan_info_env'
+version: '1.0.0'
+config-version: 2
+
+profile: 'jordan_info_env'
+
+model-paths: ["models"]
+analysis-paths: ["analyses"]
+test-paths: ["tests"]
+seed-paths: ["seeds"]
+macro-paths: ["macros"]
+snapshot-paths: ["snapshots"]
+
+target-path: "target"
+clean-targets:
+  - "target"
+  - "dbt_packages"
+
+models:
+  jordan_info_env:
+    # Materialization defaults
+    +materialized: table
+    
+    silver:
+      +schema: silver
+      +materialized: table
+      +tags: ['silver', 'cleaned']
+    
+    gold:
+      +schema: gold
+      +materialized: table
+      +tags: ['gold', 'analytics']

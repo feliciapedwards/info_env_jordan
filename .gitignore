@@ -1,0 +1,49 @@
+# ============================================
+# Jordan Information Environment Project
+# Git Ignore File
+# ============================================
+
+# dbt artifacts (regenerated on build)
+target/
+logs/
+dbt_packages/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+*.egg-info/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+*/.ipynb_checkpoints/*
+
+# Environment variables (credentials)
+.env
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.log
+archive/
+
+# Databricks
+.databricks/
+
+# User-specific Databricks workspace files
+.user.yml

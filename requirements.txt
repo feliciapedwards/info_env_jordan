@@ -1,0 +1,41 @@
+# ============================================
+# Jordan Information Environment Project
+# Python Package Requirements
+# ============================================
+
+# Core Data Processing
+pandas>=2.0.0
+numpy>=1.24.0
+pyspark>=3.4.0
+
+# API Clients
+serpapi>=0.1.5          # Google Trends data
+requests>=2.31.0        # Generic HTTP requests
+wbgapi>=1.0.12          # World Bank API
+
+# Data Transformation
+dbt-databricks>=1.7.0   # dbt for Databricks
+sqlparse>=0.4.4         # SQL parsing
+
+# Statistical Analysis
+scipy>=1.11.0           # Statistical tests
+statsmodels>=0.14.0     # Time series, Granger causality
+scikit-learn>=1.3.0     # Machine learning
+
+# Visualization
+matplotlib>=3.7.0       # Basic plotting
+seaborn>=0.12.0         # Statistical visualizations
+plotly>=5.17.0          # Interactive charts
+
+# Utilities
+python-dotenv>=1.0.0    # Environment variable management
+pytz>=2023.3            # Timezone handling
+
+# Databricks
+databricks-cli>=0.18.0  # Databricks CLI
+databricks-sdk>=0.12.0  # Databricks SDK
+
+# Optional: Development
+pytest>=7.4.0           # Testing
+black>=23.7.0           # Code formatting
+ruff>=0.0.285           # Linting

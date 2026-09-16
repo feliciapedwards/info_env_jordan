@@ -1,0 +1,355 @@
+version: 2
+
+models:
+  - name: gdelt_jordan_topics
+    description: Cleaned and transformed GDELT topic data for Jordan media coverage
+    columns:
+      - name: article_date
+        description: Date of articles (converted to DATE type)
+        tests:
+          - not_null
+          - dbt_utils.not_null_proportion:
+              at_least: 0.99
+      
+      - name: topic
+        description: Topic category from GDELT taxonomy
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_of_type:
+              column_type: string
+      
+      - name: article_count
+        description: Number of articles for this topic
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0
+              max_value: 1000000
+      
+      - name: avg_tone
+        description: Average sentiment tone (-10 to +10)
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: -10
+              max_value: 10
+      
+      - name: processed_at
+        description: Timestamp when the record was processed
+        tests:
+          - not_null
+
+  - name: google_trends
+    description: Cleaned Google Trends search data for Jordan economic topics
+    columns:
+      - name: event_date
+        description: Date of the trend data point
+        tests:
+          - not_null
+      
+      - name: search_term
+        description: Economic keyword being tracked
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['inflation', 'unemployment', 'economy', 'prices', 'cost of living']
+      
+      - name: trend_score
+        description: Normalized trend score (0-100)
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0
+              max_value: 100
+      
+      - name: timestamp_datetime
+        description: Converted timestamp as datetime
+        tests:
+          - not_null
+      
+      - name: processed_at
+        description: Timestamp when the record was processed
+        tests:
+          - not_null
+    
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns:
+            - event_date
+            - search_term
+
+  - name: acled_jordan_events
+    description: |
+      AI-enriched ACLED conflict and protest event data for Jordan.
+      Includes AI-powered cause classification (broad + granular), 
+      crowd size estimates, and derived analytical flags.
+      Runtime: ~3-5 minutes for AI classification on 1,300+ events.
+    columns:
+      - name: event_id_cnty
+        description: Unique event identifier
+        tests:
+          - not_null
+          - unique
+      
+      - name: event_date
+        description: Date the event occurred (converted to DATE)
+        tests:
+          - not_null
+      
+      - name: year
+        description: Year of the event
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 2015
+              max_value: 2030
+      
+      - name: disorder_type
+        description: Type of disorder
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['Political violence', 'Protests', 'Strategic developments']
+      
+      - name: event_type
+        description: Specific event classification
+        tests:
+          - not_null
+      
+      - name: latitude
+        description: Geographic latitude (cast to DOUBLE)
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 29.0
+              max_value: 34.0
+      
+      - name: longitude
+        description: Geographic longitude (cast to DOUBLE)
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 34.0
+              max_value: 40.0
+      
+      - name: fatalities
+        description: Number of fatalities (defaults to 0)
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0
+              max_value: 10000
+      
+      - name: processed_at
+        description: Timestamp when the record was processed
+        tests:
+          - not_null
+      
+      # Temporal fields
+      - name: event_month
+        description: Month extracted from event_date (1-12)
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 1
+              max_value: 12
+      
+      - name: event_quarter
+        description: Quarter extracted from event_date (1-4)
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 1
+              max_value: 4
+      
+      # AI Enrichment - Broad Categories
+      - name: primary_cause
+        description: |
+          AI-classified primary cause/grievance using ai_classify().
+          11 broad categories: labor_workers_rights, palestinian_solidarity,
+          government_policy, economic_grievances, tribal_violence, 
+          education_issues, healthcare_issues, service_delivery,
+          violence_other, environmental, other
+        tests:
+          - not_null
+          - accepted_values:
+              values:
+                - labor_workers_rights
+                - palestinian_solidarity
+                - government_policy
+                - economic_grievances
+                - tribal_violence
+                - education_issues
+                - healthcare_issues
+                - service_delivery
+                - violence_other
+                - environmental
+                - other
+      
+      # AI Enrichment - Granular Categories
+      - name: specific_primary_cause
+        description: |
+          AI-classified detailed cause/grievance using ai_classify().
+          60+ granular subcategories for deeper analysis.
+          Examples: gaza_bombardment_protest, amnesty_law_demand,
+          public_sector_wage_dispute, fuel_price_protest, etc.
+        tests:
+          - not_null
+      
+      # Crowd Size Enrichment
+      - name: crowd_size_int
+        description: |
+          Extracted crowd size from tags, converted to integer estimate.
+          Mappings: 'tens' -> 10, 'dozens' -> 30, 'hundreds' -> 200, 
+          'thousands' -> 2000, numeric -> exact value, 'no report'/null -> 0
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_in_set:
+              value_set: [0, 10, 30, 50, 200, 2000]
+              or_equal: false
+      
+      # Analytical Flags
+      - name: has_fatalities
+        description: Boolean flag - true if event had any fatalities
+        tests:
+          - not_null
+      
+      - name: is_violent
+        description: |
+          Boolean flag - true if event_type indicates violence
+          (Riots, Violence against civilians, Battles, Explosions/Remote violence)
+        tests:
+          - not_null
+      
+      - name: is_peaceful_protest
+        description: Boolean flag - true if event is a protest with zero fatalities
+        tests:
+          - not_null
+      
+      - name: actor_category
+        description: |
+          Simplified actor classification based on inter1 code.
+          Values: state_forces, political_militia, identity_militia,
+          rioters, protesters, civilians, external_other_forces, other
+        tests:
+          - not_null
+          - accepted_values:
+              values:
+                - state_forces
+                - political_militia
+                - identity_militia
+                - rioters
+                - protesters
+                - civilians
+                - external_other_forces
+                - other
+
+  - name: economic_indicators_monthly
+    description: |
+      Monthly economic indicators for Jordan expanded from quarterly data.
+      Transforms bronze quarterly metrics into monthly grain for gold layer consumption.
+      
+      Source: bronze.jordan_econ_metrics_qtr (88 quarters, 2005-2026)
+      Output: ~264 monthly rows (3x expansion: each quarter repeats across 3 months)
+      
+      Strategy: Flat repeat - each quarter's value is identical across its 3 months.
+      This is honest about data granularity and appropriate for economic context variables.
+      
+      Runtime: <1 minute (no AI functions)
+    
+    columns:
+      - name: event_month
+        description: First day of the month (DATE format) - primary grain for joins with gold layer
+        tests:
+          - not_null
+          - unique
+      
+      - name: gdp_growth_rate
+        description: |
+          GDP growth rate (%). Quarterly value repeated across 3 months.
+          Forward-filled for gaps of 1 quarter or less.
+        tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: -10
+              max_value: 15
+              row_condition: "gdp_growth_rate IS NOT NULL"
+      
+      - name: unemployment_rate
+        description: |
+          Total unemployment rate (%). Quarterly value repeated across 3 months.
+          Forward-filled for gaps of 1 quarter or less.
+        tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0
+              max_value: 50
+              row_condition: "unemployment_rate IS NOT NULL"
+      
+      - name: youth_unemployment_rate
+        description: |
+          Youth (15-24) unemployment rate (%). Quarterly value repeated across 3 months.
+          Forward-filled for gaps of 1 quarter or less.
+        tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0
+              max_value: 70
+              row_condition: "youth_unemployment_rate IS NOT NULL"
+      
+      - name: inflation_rate
+        description: |
+          Consumer price inflation rate (%). Quarterly average repeated across 3 months.
+          Forward-filled for gaps of 1 quarter or less.
+        tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: -5
+              max_value: 20
+              row_condition: "inflation_rate IS NOT NULL"
+      
+      - name: source_quarter
+        description: |
+          Source quarter for this month's values (e.g., '2022 Q1').
+          Useful for data lineage and debugging.
+        tests:
+          - not_null
+      
+      - name: data_granularity
+        description: |
+          Always 'quarterly_repeated' - indicates values are quarterly data
+          repeated across 3 months, not true monthly observations.
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['quarterly_repeated']
+      
+      - name: has_forward_filled_values
+        description: |
+          Boolean flag - true if any of the 4 indicators were forward-filled
+          from a previous quarter (indicates missing source data).
+        tests:
+          - not_null
+      
+      - name: month_of_quarter
+        description: |
+          Position within quarter (1, 2, or 3).
+          1 = first month (Jan/Apr/Jul/Oct), 2 = second, 3 = third.
+        tests:
+          - not_null
+          - accepted_values:
+              values: [1, 2, 3]
+      
+      - name: processed_at
+        description: Timestamp when the record was processed by dbt
+        tests:
+          - not_null
+    
+    tests:
+      - dbt_utils.recency:
+          datepart: month
+          field: event_month
+          interval: 6
+          config:
+            severity: warn
+      - dbt_expectations.expect_table_row_count_to_be_between:
+          min_value: 200
+          max_value: 300
+          config:
+            severity: warn
