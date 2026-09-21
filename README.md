@@ -98,18 +98,16 @@ The project follows the medallion architecture pattern:
 4. Legacy notebooks archived in archive/legacy_silver_notebooks.
 5. World Bank and geoBoundaries: Stays in bronze (reference only, not transformed to silver layer)
 
-### Analysis
-1. **Jordan Information Environment - Comprehensive Analysis**: End-to-end analysis
-2. **ACLED Jordan Events Analysis**: Deep dive into political events
-3. **ACLED Jordan Silver Layer ETL**: ETL pipeline documentation
-4. **02_eda_geo_governorates**: Geographic data exploration
-5. **02_bronze_worldbank_eda**: Economic indicators exploration
-
-### Queries
-- **Schema for Jordan Project**: Database schema documentation
-- **02_bronze_google_trends_eda**: Trends analysis
-- **02_bronze_acle_eda**: ACLED data quality checks
-- **inspect silver acled jordan**: Silver layer validation
+### Analysis & Queries
+1. **Jordan Information Environment - Comprehensive Analysis** (notebook): End-to-end analysis
+2. **ACLED Jordan Events Analysis** (notebook): Deep dive into political events
+3. **ACLED Jordan Silver Layer ETL** (notebook): ETL pipeline documentation
+4. **02_eda_geo_governorates** (notebook): Geographic data exploration
+5. **02_bronze_worldbank_eda** (notebook): Economic indicators exploration
+6. **Schema for Jordan Project** (query): Database schema documentation
+7. **02_bronze_google_trends_eda** (query): Trends analysis
+8. **02_bronze_acle_eda** (query): ACLED data quality checks
+9. **inspect silver acled jordan** (query): Silver layer validation
 
 ## Technology Stack
 
