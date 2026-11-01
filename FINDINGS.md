@@ -169,6 +169,27 @@ After implementing a policy (e.g., subsidy reform), compare:
 
 ---
 
+## ⚠️ Limitations
+
+### Statistical & Methodological
+- **Correlation ≠ Causation**: Findings rely on lagged regression and temporal precedence, not true experimental design or validated Granger causality tests. Language like "drives" or "predicts" reflects statistical precedence, not proven causal mechanisms.
+- **Small sample size**: Only 44 monthly observations (~4 years), limiting statistical power — especially for thematic subsets with fewer events.
+- **Granularity mismatch**: Weekly data (events, searches, media) was combined with quarterly World Bank economic indicators, requiring interpolation/aggregation that can distort true lag structure.
+- **No formal confounder control**: External shocks (regional conflict, COVID-19 aftermath, global inflation trends) were not isolated as controls, so some observed relationships may reflect shared external drivers rather than direct causality.
+
+### Data Source Limitations
+- **ACLED coverage bias**: Event reporting may undercount unrest in rural/remote areas or informal/unreported incidents.
+- **Google Trends constraints**: Reflects relative search interest (indexed 0-100), not absolute search volume; keyword selection (18 terms, English + Arabic) may miss emerging narratives or dialectal variation.
+- **GDELT noise**: Automated global media monitoring may include indirect or tangential mentions of Jordan, and tone scoring is machine-generated without human validation.
+- **World Bank reporting lag**: Quarterly economic indicators are often revised retroactively and may not reflect real-time conditions.
+
+### Scope & Generalizability
+- **Thematic classification subjectivity**: Labeling events as "economic" vs. "political" involves judgment calls; mixed-motive protests may be misclassified.
+- **Country-level aggregation only**: No governorate/sub-national analysis, which may mask important regional heterogeneity in triggers and responses.
+- **Time- and context-specific**: Findings are specific to Jordan during 2021-2025 and may not generalize to other countries, regions, or time periods with different media ecosystems or political contexts.
+
+---
+
 ## 📚 Future Research Directions
 
 1. **Incorporate X/Twitter data**: Real-time sentiment, protest organization signals
@@ -191,13 +212,12 @@ See `README.md` for table schemas and access instructions.
 
 ## 🔗 Related Analyses
 
-- **[Correlation & Causation Analysis Notebook](analysis/)**: Full statistical tests, lagged regressions
-- **[Comprehensive Analysis Notebook](analysis/)**: End-to-end workflow, charts, interpretations
+- **[Analysis](analysis/)**: Full set of notebooks covering statistical tests, lagged regressions, and the end-to-end analysis workflow
 - **[Gold Layer Tables](models/gold/)**: dbt transformations, theme definitions
 
 ---
 
-**Last Updated**: September 2024  
+**Last Updated**: November 2026  
 **Author**: Felicia Edwards  
 **Contact**: feliciapedwards@gmail.com  
 **Unity Catalog**: `info_env_jordan`
