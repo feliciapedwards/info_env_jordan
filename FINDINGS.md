@@ -217,7 +217,7 @@ See `README.md` for table schemas and access instructions.
 
 ---
 
-**Last Updated**: September 2024  
+**Last Updated**: November 2026  
 **Author**: Felicia Edwards  
 **Contact**: feliciapedwards@gmail.com  
 **Unity Catalog**: `info_env_jordan`
