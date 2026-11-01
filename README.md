@@ -14,11 +14,10 @@ Jordan Information Environment Project/
 │   ├── gold/           # Gold layer dbt models
 │   └── sources.yml     # dbt source definitions
 ├── analysis/            # Exploratory analysis and reporting
-├── archive/             # Archived legacy notebooks
 ├── tests/               # dbt tests
 ├── dbt_project.yml      # dbt project configuration
 ├── profiles.yml         # dbt connection profiles
-├── run_dbt              # dbt execution notebook
+├── run_dbt.py           # dbt execution script
 └── README.md           # This file
 ```
 
@@ -36,7 +35,7 @@ The project integrates five primary data sources:
 ### 2. **World Bank Indicators**
    - **Source**: Economic and development indicators
    - **Bronze**: `01_ingest_worldbank`
-   - **Silver**: (not transformed - stays as bronze/reference only)
+   - **Silver**: via dbt model `economic_indicators_monthly.sql` (pivots quarterly metrics to a monthly grain)
    - **Analysis**: Economic trends, development metrics
 
 ### 3. **Google Trends**
@@ -95,19 +94,20 @@ The project follows the medallion architecture pattern:
 1. **models/silver/acled_jordan_events.sql**: Clean and standardize ACLED events (dbt)
 2. **models/silver/google_trends.sql**: Clean and deduplicate Google Trends (dbt)
 3. **models/silver/gdelt_jordan_topics.sql**: Clean GDELT media events (dbt)
-4. Legacy notebooks archived in archive/legacy_silver_notebooks.
-5. World Bank and geoBoundaries: Stays in bronze (reference only, not transformed to silver layer)
+4. **models/silver/economic_indicators_monthly.sql**: Pivot World Bank quarterly metrics to monthly grain (dbt)
+5. geoBoundaries: Stays in bronze (reference only, not transformed to silver layer)
 
 ### Analysis & Queries
 1. **Jordan Information Environment - Comprehensive Analysis** (notebook): End-to-end analysis
 2. **ACLED Jordan Events Analysis** (notebook): Deep dive into political events
-3. **ACLED Jordan Silver Layer ETL** (notebook): ETL pipeline documentation
-4. **02_eda_geo_governorates** (notebook): Geographic data exploration
+3. **Correlation & Causation Analysis - Events, Searches, Media, Economics** (notebook): Cross-source correlation analysis
+4. **02_eda_geo_governorates_eda** (notebook): Geographic data exploration
 5. **02_bronze_worldbank_eda** (notebook): Economic indicators exploration
-6. **Schema for Jordan Project** (query): Database schema documentation
+6. **02_ingest_gdelt_eda** (notebook): GDELT ingestion exploration
 7. **02_bronze_google_trends_eda** (query): Trends analysis
 8. **02_bronze_acle_eda** (query): ACLED data quality checks
 9. **inspect silver acled jordan** (query): Silver layer validation
+10. **jordan vs worldbank economics** (query): World Bank data exploration
 
 ## Technology Stack
 
@@ -251,12 +251,17 @@ The silver models include comprehensive tests:
 dbt test --select test_end_to_end_pipeline
 ```
 
-This validates the entire Bronze → Silver → Gold pipeline in one test:
+This validates the entire Bronze → Silver → Gold medallion pipeline in one test:
 - ✅ All layers have data (bronze >100 events, >1000 trends)
 - ✅ Row counts are reasonable (silver 100-10,000 range)
-- ✅ Gold tables have expected grain (262 weeks, 44 months)
+- ✅ Gold tables have expected grain (10-100 months per theme table)
 - ✅ Critical columns are not null
 - ✅ Data lineage is intact (silver ≤ bronze rows)
+
+> Note: `tests/singular/test_end_to_end_pipeline.sql` also references a
+> `gold.unified_weekly_indicators` model that is not defined anywhere in
+> `models/gold/`. That check will fail to compile until the model is added
+> or the check is removed.
 
 #### Run All Tests
 ```bash
@@ -281,8 +286,15 @@ dbt test
 - `info_env_jordan.silver.acled_jordan_events` - Cleaned ACLED events with AI enrichments
 - `info_env_jordan.silver.google_trends` - Deduplicated Google Trends search data
 - `info_env_jordan.silver.gdelt_jordan_topics` - GDELT media coverage
+- `info_env_jordan.silver.economic_indicators_monthly` - World Bank quarterly metrics expanded to monthly grain
 
 ### Gold Tables (Theme-Based Analytics)
+
+Only two themes are currently implemented as dbt models. Earlier exploratory notebooks
+(e.g. `analysis/Jordan Information Environment - Comprehensive Analysis.py`, `run_dbt.py`)
+reference additional tables (`unified_weekly_indicators`, `theme_political_stability`,
+`theme_regional_identity`) that are **not** built by the current dbt project - they were
+part of an earlier prototype and have not been ported to `models/gold/`.
 
 **Theme 1: Labor & Employment** (`theme_labor_employment`)
 - Labor protests + unemployment searches → predicts unemployment rate
@@ -292,17 +304,9 @@ dbt test
 - Economic protests + inflation searches → predicts inflation/GDP
 - Use for: Subsidy policy, fiscal interventions, cost-of-living relief
 
-**Theme 3: Political Stability** (`theme_political_stability`)
-- Government/corruption protests (descriptive analysis, weak economic correlation)
-- Use for: Governance context, not economic prediction
-
-**Theme 4: Regional/Identity** (`theme_regional_identity`)
-- Palestinian solidarity + tribal violence (NO economic correlation)
-- Use for: Contextual understanding, not economic policy
-
 **Combined Table** (`ml_combined_economic_themes`)
 - ✅ **PRIMARY TABLE for economic prediction and policy analysis**
-- Combines Themes 1 & 2 only (economically-relevant features)
+- Combines Themes 1 & 2 (the only implemented themes)
 - ~44 monthly observations with 50+ features
 - Target variables: unemployment_rate, inflation_rate, gdp_growth
 - Includes lagged features (1-3 months) and rolling averages
@@ -327,12 +331,12 @@ The gold layer organizes data into **policy-relevant themes** to:
 
 ### Theme-to-Policy Mapping
 
-| Theme | Policy Questions | Predictive Power | Action |
-|-------|-----------------|------------------|--------|
-| **Labor & Employment** | Raise wages? Deploy subsidies? | Strong (r ≈ 0.65) | ✅ Use for prediction |
-| **Economic Conditions** | Remove subsidies? Inflation risk? | Strong (r ≈ 0.55) | ✅ Use for prediction |
-| **Political Stability** | Corruption impact on GDP? | Moderate (r ≈ 0.32) | ⚠️ Context only |
-| **Regional/Identity** | Do Palestinian protests hurt economy? | None (r < 0.1) | ❌ Exclude from models |
+| Theme | Policy Questions | Status |
+|-------|-----------------|--------|
+| **Labor & Employment** | Raise wages? Deploy subsidies? | ✅ Implemented (`theme_labor_employment`) |
+| **Economic Conditions** | Remove subsidies? Inflation risk? | ✅ Implemented (`theme_economic_conditions`) |
+| **Political Stability** | Corruption impact on GDP? | ❌ Not implemented in dbt (prototype only) |
+| **Regional/Identity** | Do Palestinian protests hurt economy? | ❌ Not implemented in dbt (prototype only) |
 
 ## Analysis Capabilities
 
