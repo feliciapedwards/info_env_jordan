@@ -41,13 +41,9 @@ See [FINDINGS.md](FINDINGS.md) for evidence, methodology, and limitations.
 
 ## How to run it
 
-1. **Prerequisites**: Databricks workspace access, permissions on the `info_env_jordan` catalog, and API keys for SerpAPI (Google Trends) and ACLED, stored as Databricks secrets (`serpapi`, `acled` scopes). World Bank, GDELT, and geoBoundaries need no credentials.
+1. **Prerequisites**: Databricks workspace access and permissions on the `info_env_jordan` catalog. API keys for SerpAPI (Google Trends) and ACLED are required — see [SETUP.md](SETUP.md) for credential and dbt CLI setup.
 2. **Ingest bronze data**: run the `bronze/01_ingest_*` notebooks.
-3. **Transform to silver/gold**: run dbt via the `run_dbt` notebook, or manually:
-   ```bash
-   dbt run --project-dir <path-to-project>
-   dbt test --project-dir <path-to-project>
-   ```
+3. **Transform to silver/gold**: run dbt via the `run_dbt` notebook, or manually (see [SETUP.md](SETUP.md) for CLI commands).
 4. **Analyze**: explore results in `analysis/` notebooks, starting with *Jordan Information Environment - Comprehensive Analysis*.
 
 For project structure, data source details, table catalog, and theme-to-policy mapping, see [DATA_DICTIONARY.md](DATA_DICTIONARY.md).
