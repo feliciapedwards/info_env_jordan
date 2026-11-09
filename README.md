@@ -20,6 +20,9 @@ Bronze (raw ingestion)  →  Silver (cleaned, dbt)  →  Gold (thematic, monthly
 - **Silver**: dbt models in `models/silver/` (`info_env_jordan.silver`)
 - **Gold**: dbt models in `models/gold/`, monthly/country-level, policy-themed (`info_env_jordan.gold`)
 
+<img width="2844" height="1552" alt="image" src="https://github.com/user-attachments/assets/5b0e2e96-e511-4230-933f-4c8031a162c7" />
+
+
 ## Key findings
 
 1. **Bidirectional feedback between events, searches, and media** — protests drive media coverage and searches, and searches/media also predict future protests (events ↔ media r = 0.66; searches lead events by ~1 week).
