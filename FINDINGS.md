@@ -2,11 +2,11 @@
 
 ## Executive Summary
 
-This project analyzed Jordan's information environment (2021-2025) by integrating conflict events (ACLED), online search behavior (Google Trends), media coverage (GDELT), and economic indicators (World Bank). The analysis reveals **bidirectional causal feedback loops** among protests, public attention, and inflation — challenging traditional assumptions about economic hardship as the primary driver of civil unrest.
+This project analyzed Jordan's information environment (2021-2025) by integrating conflict events (ACLED), online search behavior (Google Trends), media coverage (GDELT), and economic indicators (World Bank). The analysis reveals correlation among protests, public attention, and inflation — challenging traditional assumptions about economic hardship as the primary driver of civil unrest.
 
 ---
 
-## 🔍 Finding #1: Strong Bidirectional Feedback Between Events, Searches, and Media
+## 🔍 Finding #1: Strong Correlation Between Events, Searches, and Media
 
 ### Evidence
 - **Events ↔ Searches**: r = 0.29, p < 0.001 (weekly data)
@@ -28,13 +28,13 @@ Protest Event → Media Coverage → Google Searches → More Protests → ...
 
 ---
 
-## 🔍 Finding #2: Economic Protests Predict Inflation (Not the Other Way Around)
+## 🔍 Finding #2: Economic Protests Correlate With Inflation
 
 ### Evidence: Thematic Analysis (Monthly Data)
 
 | Relationship | Correlation | Direction | Interpretation |
 |--------------|-------------|-----------|----------------|
-| **Economic events → Inflation** | r = 0.765*** | Events lead | Protests **drive** inflation |
+| **Economic events → Inflation** | r = 0.765*** | Events lead | Protests **correlate with** inflation |
 | **Inflation → Economic events** | r = 0.584*** | Inflation follows | Inflation **amplifies** protests |
 | **Economic searches → Inflation** | r = 0.722*** | Searches lead | Public anticipates inflation |
 
@@ -90,7 +90,7 @@ When we analyzed **all events together** at **quarterly** granularity:
 ### Why Thematic Monthly Analysis Succeeded
 When we separated **economic protests** from **political protests** and used **monthly** data:
 - ✅ Strong predictive relationships emerged
-- ✅ Bidirectional causality visible
+- ✅ Correlation visible
 - ✅ Actionable insights for policy
 
 ### Lesson for Practitioners
@@ -159,7 +159,7 @@ After implementing a policy (e.g., subsidy reform), compare:
 1. **Aggregate vs. Thematic**: Tested both; thematic wins
 2. **Weekly vs. Quarterly**: Weekly for information environment, quarterly for economics
 3. **Granger Causality → Lagged Regression**: Environment limitations forced adaptation
-4. **Correlation + Temporal Precedence**: Established bidirectional causality
+4. **Correlation + Temporal Precedence**: Established correlation
 
 ### Gold Layer Architecture
 - **Monthly grain, country-level** aggregation
@@ -172,7 +172,7 @@ After implementing a policy (e.g., subsidy reform), compare:
 ## ⚠️ Limitations
 
 ### Statistical & Methodological
-- **Correlation ≠ Causation**: Findings rely on lagged regression and temporal precedence, not true experimental design or validated Granger causality tests. Language like "drives" or "predicts" reflects statistical precedence, not proven causal mechanisms.
+- **Correlation ≠ Causation**
 - **Small sample size**: Only 44 monthly observations (~4 years), limiting statistical power — especially for thematic subsets with fewer events.
 - **Granularity mismatch**: Weekly data (events, searches, media) was combined with quarterly World Bank economic indicators, requiring interpolation/aggregation that can distort true lag structure.
 - **No formal confounder control**: External shocks (regional conflict, COVID-19 aftermath, global inflation trends) were not isolated as controls, so some observed relationships may reflect shared external drivers rather than direct causality.
