@@ -25,7 +25,7 @@ Bronze (raw ingestion)  →  Silver (cleaned, dbt)  →  Gold (thematic, monthly
 
 ## Key findings
 
-1. **Bidirectional feedback between events, searches, and media** — protests drive media coverage and searches, and searches/media also predict future protests (events ↔ media r = 0.66; searches lead events by ~1 week).
+1. **Correlation between events, searches, and media** — protests drive media coverage and searches, and searches/media also predict future protests (events ↔ media r = 0.66; searches lead events by ~1 week).
 2. **Economic protests predict inflation, not just the reverse** — events → inflation (r = 0.765, p < .001) is stronger than inflation → events (r = 0.584, p < .001), suggesting a self-reinforcing inflationary spiral rather than hardship as the sole driver.
 3. **Youth unemployment negatively correlates with protests** (r = -0.42) — contradicting the "frustrated youth" hypothesis; protests track policy trigger events (subsidy cuts, corruption) more than unemployment levels.
 
