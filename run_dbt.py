@@ -111,7 +111,7 @@ else:
 import subprocess
 
 project_dir = '/Workspace/Users/feliciapedwards@gmail.com/Jordan Information Environment Project'
-model_name = 'economic_indicators_monthly'  # Change this to run different models
+model_name = 'unified_weekly_indicators'  # Change this to run different models
 
 print(f"Running model: {model_name}...\n")
 result = subprocess.run(

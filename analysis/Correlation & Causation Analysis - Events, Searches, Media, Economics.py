@@ -1112,3 +1112,428 @@ for r in results_events_to_econ:
 # MAGIC 3. ✅ Use **monthly granularity** not quarterly
 # MAGIC 4. ✅ Monitor **inflation searches** as leading indicator (r=0.60)
 # MAGIC 5. ❌ Don't mix political and economic events in aggregate counts
+
+# COMMAND ----------
+
+# DBTITLE 1,Part 6 Header: Charts
+# MAGIC %md
+# MAGIC ## Part 6: Charts Visualizing the Findings
+# MAGIC
+# MAGIC Each chart below maps to a specific claim in the summary, with the statistic recomputed from the data and annotated on the chart.
+# MAGIC
+# MAGIC **Note on data sources**: `gold.quarterly_events_economics` has since been removed from the workspace, and the gold theme tables no longer carry World Bank indicator values. The charts below rebuild those joins using `silver.economic_indicators_monthly` (monthly, forward-filled from quarterly World Bank data — the same construction the original analysis used), so the economic claims remain reproducible.
+
+# COMMAND ----------
+
+# DBTITLE 1,Chart Setup: Load Data
+# Imports and shared data for all charts (self-contained — does not depend on earlier cells)
+import pandas as pd
+import numpy as np
+from scipy.stats import pearsonr
+from sklearn.linear_model import LinearRegression
+from sklearn.metrics import r2_score
+import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
+
+plt.rcParams.update({'figure.dpi': 100, 'axes.grid': True, 'grid.alpha': 0.3})
+
+# --- 1) Weekly indicators (261 weeks) ---
+df = spark.sql("""
+    SELECT week_start_date, year, week, total_events, protests_count, demonstrations_count,
+           political_violence_count, avg_trend_score, avg_media_tone, total_articles, total_fatalities
+    FROM info_env_jordan.gold.unified_weekly_indicators
+    WHERE week_start_date >= '2022-01-01' AND week_start_date < '2025-06-01'
+    ORDER BY week_start_date
+""").toPandas()
+df['week_start_date'] = pd.to_datetime(df['week_start_date'])
+
+# --- 2) Monthly thematic data: theme tables + economic indicators from silver ---
+df_monthly = spark.sql("""
+    SELECT me.event_month, me.total_economic_events, me.fuel_price_protests, me.inflation_protests,
+           me.avg_inflation_search, me.avg_fuel_search,
+           si.inflation_rate, si.gdp_growth_rate, si.unemployment_rate, si.youth_unemployment_rate
+    FROM info_env_jordan.gold.theme_economic_conditions me
+    LEFT JOIN info_env_jordan.silver.economic_indicators_monthly si
+        ON me.event_month = si.event_month
+    WHERE me.event_month >= '2022-01-01' AND me.event_month < '2025-06-01'
+    ORDER BY me.event_month
+""").toPandas()
+df_monthly['event_month'] = pd.to_datetime(df_monthly['event_month'])
+
+df_labor = spark.sql("""
+    SELECT ml.event_month, ml.total_labor_events, ml.wage_disputes,
+           ml.avg_jobs_search, ml.avg_unemployment_search,
+           si.inflation_rate, si.gdp_growth_rate, si.unemployment_rate, si.youth_unemployment_rate
+    FROM info_env_jordan.gold.theme_labor_employment ml
+    LEFT JOIN info_env_jordan.silver.economic_indicators_monthly si
+        ON ml.event_month = si.event_month
+    WHERE ml.event_month >= '2022-01-01' AND ml.event_month < '2025-06-01'
+    ORDER BY ml.event_month
+""").toPandas()
+df_labor['event_month'] = pd.to_datetime(df_labor['event_month'])
+
+# --- 3) Quarterly rebuild (replaces the removed gold.quarterly_events_economics) ---
+qtr_events = spark.sql("""
+    SELECT YEAR(week_start_date) AS year, QUARTER(week_start_date) AS quarter,
+           SUM(total_events) AS total_events, SUM(protests_count) AS total_protests,
+           AVG(avg_trend_score) AS avg_search_interest, SUM(total_articles) AS total_articles
+    FROM info_env_jordan.gold.unified_weekly_indicators
+    WHERE week_start_date >= '2022-01-01' AND week_start_date < '2025-06-01'
+    GROUP BY 1, 2
+    ORDER BY 1, 2
+""").toPandas()
+
+qtr_econ = spark.sql("""
+    SELECT YEAR(event_month) AS year, QUARTER(event_month) AS quarter,
+           MAX(inflation_rate) AS inflation, MAX(unemployment_rate) AS unemployment,
+           MAX(youth_unemployment_rate) AS youth_unemployment, MAX(gdp_growth_rate) AS gdp_growth
+    FROM info_env_jordan.silver.economic_indicators_monthly
+    WHERE month_of_quarter = 1 AND event_month >= '2022-01-01' AND event_month < '2025-06-01'
+    GROUP BY 1, 2
+    ORDER BY 1, 2
+""").toPandas()
+
+df_qtr = qtr_events.merge(qtr_econ, on=['year', 'quarter'], how='left')
+df_qtr['period'] = df_qtr['year'].astype(str) + '-Q' + df_qtr['quarter'].astype(str)
+
+print(f"Weekly:   {len(df)} weeks ({df.week_start_date.min():%Y-%m-%d} to {df.week_start_date.max():%Y-%m-%d})")
+print(f"Monthly:  {len(df_monthly)} econ months / {len(df_labor)} labor months")
+print(f"Quarterly: {len(df_qtr)} quarters; youth unemp populated in {df_qtr.youth_unemployment.notna().sum()}")
+
+# --- Shared helpers (redefined so this section is self-contained) ---
+def lag_corr_series(data, v1, v2, max_lag=4):
+    """Pearson r of v1 vs v2 across lead/lag offsets -4..+4."""
+    rows = []
+    for lag in range(-max_lag, max_lag + 1):
+        if lag < 0:
+            a, b = data[v1].iloc[:lag], data[v2].iloc[-lag:]
+        elif lag > 0:
+            a, b = data[v1].iloc[lag:], data[v2].iloc[:-lag]
+        else:
+            a, b = data[v1], data[v2]
+        r, p = pearsonr(a.values, b.values)
+        rows.append({'lag': lag, 'r': r, 'p': p})
+    return pd.DataFrame(rows)
+
+def predictive_test(data, predictor, outcome, lag=1):
+    """R2 and significance of predictor(t-lag) -> outcome(t)."""
+    d = data[[predictor, outcome]].copy()
+    d['x'] = d[predictor].shift(lag)
+    d = d.dropna()
+    X, y = d[['x']].values, d[outcome].values
+    m = LinearRegression().fit(X, y)
+    r, p = pearsonr(X.flatten(), y)
+    return {'r2': r2_score(y, m.predict(X)), 'r': r, 'p': p, 'coef': m.coef_[0], 'n': len(d)}
+
+def sig_stars(p):
+    return '***' if p < 0.001 else '**' if p < 0.01 else '*' if p < 0.05 else ' ns'
+
+# COMMAND ----------
+
+# DBTITLE 1,Chart 1: Weekly Time Series
+# CHART 1: Weekly time series — supports "Events, Searches & Media move together" (Part 1)
+fig, axes = plt.subplots(3, 1, figsize=(13, 8), sharex=True)
+
+axes[0].plot(df.week_start_date, df.total_events, color='#d62728', lw=1)
+axes[0].set_ylabel('Total events')
+axes[0].set_title('ACLED protest & violence events per week')
+
+axes[1].plot(df.week_start_date, df.avg_trend_score, color='#1f77b4', lw=1)
+axes[1].set_ylabel('Avg trend score')
+axes[1].set_title('Google search interest per week')
+
+axes[2].plot(df.week_start_date, df.total_articles, color='#2ca02c', lw=0.9)
+axes[2].set_ylabel('Total articles')
+axes[2].set_title('GDELT media article volume per week')
+axes[2].xaxis.set_major_locator(mdates.MonthLocator(interval=3))
+axes[2].xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m'))
+plt.setp(axes[2].get_xticklabels(), rotation=45, ha='right', fontsize=8)
+
+fig.suptitle('Weekly Information Environment, Jordan (2022–2025): peaks and dips align across all three series',
+             fontsize=13, fontweight='bold')
+plt.tight_layout()
+plt.show()
+
+# COMMAND ----------
+
+# DBTITLE 1,Chart 2: Correlation Heatmap
+# CHART 2: Correlation heatmap — supports the Part 1 claims
+# (Events↔Searches r=0.380, Events↔Media r=0.660, Events↔Tone r=-0.493, Searches↔Media r=0.356)
+variables = ['total_events', 'protests_count', 'avg_trend_score', 'avg_media_tone',
+             'total_articles', 'political_violence_count']
+labels = ['Events', 'Protests', 'Searches', 'Media tone', 'Articles', 'Violence']
+
+sub = df[variables].copy()
+corr = sub.corr()
+pvals = pd.DataFrame(np.nan, index=variables, columns=variables)
+for c1 in variables:
+    for c2 in variables:
+        if c1 != c2:
+            cc = sub[[c1, c2]].dropna()
+            pvals.loc[c1, c2] = pearsonr(cc[c1], cc[c2])[1]
+
+fig, ax = plt.subplots(figsize=(8, 6.5))
+im = ax.imshow(corr.values, cmap='RdBu_r', vmin=-1, vmax=1)
+ax.set_xticks(range(len(variables)), labels, rotation=35, ha='right')
+ax.set_yticks(range(len(variables)), labels)
+for i in range(len(variables)):
+    for j in range(len(variables)):
+        if i == j:
+            ax.text(j, i, '1.00', ha='center', va='center', fontsize=9, color='white')
+        else:
+            stars = '***' if pvals.iloc[i, j] < 0.001 else '**' if pvals.iloc[i, j] < 0.01 else '*' if pvals.iloc[i, j] < 0.05 else ''
+            ax.text(j, i, f"{corr.iloc[i, j]:.3f}{stars}", ha='center', va='center', fontsize=9,
+                    color='white' if abs(corr.iloc[i, j]) > 0.55 else 'black')
+fig.colorbar(im, ax=ax, label='Pearson r')
+ax.set_title('Pearson correlation matrix, 261 weeks (2022–2025)\n*** p<0.001  ** p<0.01  * p<0.05',
+             fontsize=12, fontweight='bold')
+plt.tight_layout()
+plt.show()
+
+# Recompute the four headline pairs to verify the claims
+for v1, v2, claim in [('total_events', 'avg_trend_score', 'Events ↔ Searches (claim r=0.380)'),
+                      ('total_events', 'total_articles', 'Events ↔ Media volume (claim r=0.660)'),
+                      ('total_events', 'avg_media_tone', 'Events ↔ Media tone (claim r=-0.493)'),
+                      ('avg_trend_score', 'total_articles', 'Searches ↔ Media volume (claim r=0.356)')]:
+    cc = df[[v1, v2]].dropna()
+    r, p = pearsonr(cc[v1], cc[v2])
+    print(f"{claim:45s} recomputed r = {r:+.3f} {sig_stars(p)} (p={p:.4f}, n={len(cc)})")
+
+# COMMAND ----------
+
+# DBTITLE 1,Chart 3: Lag Cross-Correlation
+# CHART 3: Lag cross-correlations — supports Part 2 claims
+# (Searches lead events by ~1 week; Events↔Media bidirectional loop)
+fig, axes = plt.subplots(1, 2, figsize=(13, 4.5), sharey=True)
+
+for ax, (v1, v2, title) in zip(axes, [
+    ('total_events', 'avg_trend_score', 'Events ↔ Google Searches'),
+    ('total_events', 'total_articles', 'Events ↔ Media Coverage')]):
+    lc = lag_corr_series(df, v1, v2, max_lag=4)
+    colors = ['#1f77b4' if p < 0.05 else '#c7c7c7' for p in lc.p]
+    ax.bar(lc.lag, lc.r, color=colors, edgecolor='black', lw=0.5)
+    for _, row in lc.iterrows():
+        ax.text(row.lag, row.r + (0.015 if row.r >= 0 else -0.035), f"{row.r:+.3f}",
+                ha='center', fontsize=7.5)
+    ax.axhline(0, color='black', lw=0.8)
+    ax.axvline(0, color='red', lw=0.8, ls='--', alpha=0.6)
+    ax.set_xlabel('Lag (negative = first variable leads by |lag| weeks)')
+    ax.set_title(title, fontsize=11)
+    ax.set_ylim(min(-0.3, lc.r.min() - 0.05), max(0.3, lc.r.max() + 0.08))
+axes[0].set_ylabel('Pearson r')
+fig.suptitle('Lead/lag analysis: blue bars = significant (p<0.05); dashed red line = simultaneous',
+             fontsize=12, fontweight='bold')
+plt.tight_layout()
+plt.show()
+
+for v1, v2 in [('total_events', 'avg_trend_score'), ('total_events', 'total_articles')]:
+    lc = lag_corr_series(df, v1, v2, max_lag=4)
+    best = lc.loc[lc.r.abs().idxmax()]
+    print(f"{v1} ↔ {v2}: strongest |r| = {best.r:+.3f} at lag {int(best.lag)} (p={best.p:.4f})")
+
+# COMMAND ----------
+
+# DBTITLE 1,Chart 4: Predictive R2
+# CHART 4: Predictive causality R2 — supports Part 3 claims
+# (Events→Searches R2=0.078, Searches→Events R2=0.090, Events→Media R2=0.295, Media→Events R2=0.274)
+tests = [
+    ('total_events', 'avg_trend_score', 'Events(t-1) → Searches(t)'),
+    ('avg_trend_score', 'total_events', 'Searches(t-1) → Events(t)'),
+    ('total_events', 'total_articles', 'Events(t-1) → Media(t)'),
+    ('total_articles', 'total_events', 'Media(t-1) → Events(t)'),
+]
+res = {desc: predictive_test(df, pred, out) for pred, out, desc in tests}
+
+fig, ax = plt.subplots(figsize=(11, 4.5))
+names = list(res.keys())
+r2s = [res[n]['r2'] for n in names]
+colors = ['#2ca02c' if res[n]['p'] < 0.05 else '#c7c7c7' for n in names]
+bars = ax.barh(names, r2s, color=colors, edgecolor='black', lw=0.5)
+for bar, n in zip(bars, names):
+    ax.text(bar.get_width() + 0.004, bar.get_y() + bar.get_height() / 2,
+            f"R²={res[n]['r2']:.3f} {sig_stars(res[n]['p'])} (r={res[n]['r']:+.3f})",
+            va='center', fontsize=9)
+ax.set_xlabel('R² (variance in outcome explained by 1-week-lagged predictor)')
+ax.set_xlim(0, 0.42)
+ax.invert_yaxis()
+ax.set_title('Predictive causality, 1-week lag: all four directions significant → bidirectional feedback loop',
+             fontsize=12, fontweight='bold')
+plt.tight_layout()
+plt.show()
+
+for n in names:
+    print(f"{n:32s} R²={res[n]['r2']:.3f} {sig_stars(res[n]['p'])}  coef={res[n]['coef']:+.4f}  n={res[n]['n']}")
+
+# COMMAND ----------
+
+# DBTITLE 1,Chart 5: Quarterly Economics
+# CHART 5: Quarterly economics — supports Part 4 claims
+# (a) Events↔Youth unemployment same-quarter r=-0.76*** (b) no predictive power in either direction
+q = df_qtr.copy()
+q['events_lag1'] = q.total_events.shift(1)
+q['search_lag1'] = q.avg_search_interest.shift(1)
+q['yu_lag1'] = q.youth_unemployment.shift(1)
+q['unemployment_change'] = q.unemployment.diff()
+q['youth_unemployment_change'] = q.youth_unemployment.diff()
+q['gdp_growth_change'] = q.gdp_growth.diff()
+
+fig, axes = plt.subplots(1, 3, figsize=(15, 4.5))
+
+# (a) quarterly events vs youth unemployment, dual axis
+ax1 = axes[0]
+ax1.bar(range(len(q)), q.total_events, color='#d62728', alpha=0.7, label='Total events')
+ax1.set_xticks(range(len(q)), q.period, rotation=60, ha='right', fontsize=7)
+ax1.set_ylabel('Total events (ACLED)', color='#d62728')
+ax2 = ax1.twinx()
+ax2.plot(range(len(q)), q.youth_unemployment, color='#1f77b4', marker='o', ms=4, label='Youth unemployment')
+ax2.set_ylabel('Youth unemployment %', color='#1f77b4')
+ax2.grid(False)
+ax1.set_title('(a) Quarterly: events high when\nyouth unemployment LOW', fontsize=10)
+
+# (b) scatter events vs youth unemployment with fit
+cc = q[['total_events', 'youth_unemployment']].dropna()
+r_yu, p_yu = pearsonr(cc.total_events, cc.youth_unemployment)
+ax = axes[1]
+ax.scatter(cc.total_events, cc.youth_unemployment, color='#1f77b4', alpha=0.8, s=45)
+m = LinearRegression().fit(cc[['total_events']], cc.youth_unemployment)
+xs = np.linspace(cc.total_events.min(), cc.total_events.max(), 50)
+ax.plot(xs, m.predict(xs.reshape(-1, 1)), color='black', lw=1.2, ls='--')
+for _, row in cc.iterrows():
+    if row.total_events > 350 or row.total_events < 40:
+        ax.annotate(row.get('period', ''), (row.total_events, row.youth_unemployment),
+                    textcoords='offset points', xytext=(4, 3), fontsize=7)
+ax.set_xlabel('Total events in quarter')
+ax.set_ylabel('Youth unemployment %')
+ax.set_title(f'(b) Same-quarter correlation\nr = {r_yu:+.3f} {sig_stars(p_yu)} (claim: -0.76***)', fontsize=10)
+
+# (c) five predictive economic tests (claim: all not significant)
+econ_tests = [
+    ('events_lag1', 'unemployment_change', 'Events(t-1)→Unemp Δ'),
+    ('events_lag1', 'youth_unemployment_change', 'Events(t-1)→Youth Unemp Δ'),
+    ('events_lag1', 'gdp_growth_change', 'Events(t-1)→GDP Δ'),
+    ('search_lag1', 'youth_unemployment', 'Searches(t-1)→Youth Unemp'),
+    ('yu_lag1', 'total_events', 'Youth Unemp(t-1)→Events'),
+]
+rs, labels, pss = [], [], []
+for v1, v2, lab in econ_tests:
+    t = q[[v1, v2]].dropna()
+    r, p = pearsonr(t[v1], t[v2])
+    rs.append(r); labels.append(lab); pss.append(p)
+ax = axes[2]
+colors = ['#2ca02c' if p < 0.05 else '#c7c7c7' for p in pss]
+bars = ax.barh(labels, rs, color=colors, edgecolor='black', lw=0.5)
+for bar, r, p in zip(bars, rs, pss):
+    ax.text(r + (0.02 if r >= 0 else -0.02), bar.get_y() + bar.get_height() / 2,
+            f"{r:+.2f} {sig_stars(p)}", va='center', ha='left' if r >= 0 else 'right', fontsize=8.5)
+ax.axvline(0, color='black', lw=0.8)
+ax.set_xlim(-0.9, 0.9)
+ax.invert_yaxis()
+ax.set_title('(c) Predictive tests: NONE significant\n(grey = ns at p<0.05)', fontsize=10)
+
+fig.suptitle('Quarterly economics (rebuilt from silver monthly indicators): counterintuitive same-quarter link, no predictive power',
+             fontsize=12, fontweight='bold')
+plt.tight_layout()
+plt.show()
+
+print(f"Same-quarter events ↔ youth unemployment: r = {r_yu:+.3f} {sig_stars(p_yu)} (p={p_yu:.4f}, n={len(cc)}) — claim was r=-0.76***")
+
+# COMMAND ----------
+
+# DBTITLE 1,Chart 6: Thematic Scatters
+# CHART 6: Monthly thematic scatter grid — supports Part 5 claims
+# (Econ events↔Inflation 0.714, Inflation searches↔Inflation 0.602, Econ events↔GDP 0.489,
+#  Jobs searches↔Youth unemp 0.458, Wage disputes↔Unemployment 0.392)
+pairs = [
+    (df_monthly, 'total_economic_events', 'inflation_rate', 'Economic events ↔ Inflation rate', 'claim r=0.714***'),
+    (df_monthly, 'avg_inflation_search', 'inflation_rate', 'Inflation searches ↔ Inflation rate', 'claim r=0.602***'),
+    (df_monthly, 'total_economic_events', 'gdp_growth_rate', 'Economic events ↔ GDP growth', 'claim r=0.489**'),
+    (df_labor, 'avg_jobs_search', 'youth_unemployment_rate', 'Jobs searches ↔ Youth unemployment', 'claim r=0.458**'),
+    (df_labor, 'wage_disputes', 'unemployment_rate', 'Wage disputes ↔ Unemployment', 'claim r=0.392*'),
+    (df_monthly, 'fuel_price_protests', 'inflation_rate', 'Fuel price protests ↔ Inflation rate', 'claim: subcategory'),
+]
+
+fig, axes = plt.subplots(2, 3, figsize=(15, 8.5))
+for ax, (data, x, y, title, claim) in zip(axes.flat, pairs):
+    cc = data[[x, y]].dropna()
+    if cc[x].nunique() > 1 and len(cc) >= 5:
+        r, p = pearsonr(cc[x], cc[y])
+        ax.scatter(cc[x], cc[y], alpha=0.75, s=40, color='#1f77b4')
+        m = LinearRegression().fit(cc[[x]], cc[y])
+        xs = np.linspace(cc[x].min(), cc[x].max(), 50)
+        ax.plot(xs, m.predict(xs.reshape(-1, 1)), 'k--', lw=1.2)
+        stat_txt = f'r = {r:+.3f} {sig_stars(p)}\np = {p:.4f}, n = {len(cc)}'
+    else:
+        r, p = np.nan, np.nan
+        stat_txt = f'insufficient variance\n(n = {len(cc)})'
+    ax.set_title(f'{title}\n{stat_txt} | {claim}', fontsize=9.5)
+    ax.set_xlabel(x, fontsize=8.5)
+    ax.set_ylabel(y, fontsize=8.5)
+    ax.tick_params(labelsize=8)
+fig.suptitle('Thematic monthly analysis: theme-matched event types and searches correlate with their economic indicators',
+             fontsize=13, fontweight='bold')
+plt.tight_layout()
+plt.show()
+
+# COMMAND ----------
+
+# DBTITLE 1,Chart 7: Feedback Loop
+# CHART 7: The protest–inflation feedback loop — supports Part 5b claims
+# Inflation(t-1)→Events r=0.584, Events(t-1)→Inflation r=0.765 (STRONGER),
+# Inflation(t-1)→Searches r=0.630, Searches(t-1)→Inflation r=0.616, GDP both directions
+m = df_monthly.dropna(subset=['total_economic_events', 'inflation_rate']).copy()
+m['events_lag1'] = m.total_economic_events.shift(1)
+m['infl_lag1'] = m.inflation_rate.shift(1)
+m['search_lag1'] = m.avg_inflation_search.shift(1)
+m['gdp_lag1'] = m.gdp_growth_rate.shift(1)
+
+loop_tests = [
+    ('Inflation(t-1) → Events(t)', 'infl_lag1', 'total_economic_events', 0.584),
+    ('Events(t-1) → Inflation(t)', 'events_lag1', 'inflation_rate', 0.765),
+    ('Inflation(t-1) → Searches(t)', 'infl_lag1', 'avg_inflation_search', 0.630),
+    ('Searches(t-1) → Inflation(t)', 'search_lag1', 'inflation_rate', 0.616),
+    ('GDP growth(t-1) → Events(t)', 'gdp_lag1', 'total_economic_events', 0.572),
+    ('Events(t-1) → GDP growth(t)', 'events_lag1', 'gdp_growth_rate', 0.372),
+]
+
+fig, axes = plt.subplots(1, 2, figsize=(14.5, 5), gridspec_kw={'width_ratios': [1.15, 1]})
+
+# (a) monthly economic events vs inflation rate (dual axis)
+ax1 = axes[0]
+ax1.bar(m.event_month, m.total_economic_events, color='#d62728', alpha=0.65, width=22)
+ax1.set_ylabel('Economic protest events / month', color='#d62728')
+ax2 = ax1.twinx()
+ax2.plot(m.event_month, m.inflation_rate, color='#1f77b4', lw=1.6, label='Inflation rate %')
+ax2.set_ylabel('Inflation rate % (CPI, YoY)', color='#1f77b4')
+ax2.grid(False)
+ax1.set_title('(a) Economic events & inflation rise and fall together (monthly)', fontsize=11)
+
+# (b) directional lag comparison
+ax = axes[1]
+labels = [t[0] for t in loop_tests]
+recomputed = []
+for _, v1, v2, _ in loop_tests:
+    t = m[[v1, v2]].dropna()
+    if len(t) >= 5 and t[v1].nunique() > 1:
+        r, p = pearsonr(t[v1], t[v2])
+    else:
+        r, p = np.nan, np.nan
+    recomputed.append((r, p))
+colors = ['#d62728' if 'Events(t-1)' in l or 'Searches(t-1)' in l else '#1f77b4' for l in labels]
+bars = ax.barh(labels, [r for r, _ in recomputed], color=colors, edgecolor='black', lw=0.5, alpha=0.85)
+for bar, (r, p), (_, _, _, claim) in zip(bars, recomputed, loop_tests):
+    if not np.isnan(r):
+        ax.text(r + 0.02, bar.get_y() + bar.get_height() / 2,
+                f"{r:+.3f} {sig_stars(p)} (claim {claim:+.3f})", va='center', fontsize=8.5)
+ax.set_xlim(0, 1.15)
+ax.invert_yaxis()
+ax.set_xlabel('1-month lagged correlation (Pearson r)')
+ax.set_title('(b) Bidirectional: red = events/searches → economy\nblue = economy → events/searches', fontsize=11)
+
+fig.suptitle('The protest–inflation feedback loop: protests predict future inflation more strongly than inflation predicts protests',
+             fontsize=12.5, fontweight='bold')
+plt.tight_layout()
+plt.show()
+
+print('Recomputed vs claimed lagged correlations:')
+for (label, _, _, claim), (r, p) in zip(loop_tests, recomputed):
+    print(f"  {label:35s} recomputed r = {r:+.3f} {sig_stars(p) if not np.isnan(p) else ''} (claim {claim:+.3f})")

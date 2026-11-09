@@ -191,3 +191,57 @@ models:
           - not_null
           - accepted_values:
               values: [1,2,3,4]
+
+  - name: unified_weekly_indicators
+    description: |
+      Unified weekly view combining all four data sources: GDELT media coverage,
+      Google Trends search interest, and ACLED events on a weekly spine.
+
+      **Sources:** silver.gdelt_jordan_topics, silver.google_trends, silver.acled_jordan_events
+      **Grain:** One row per week (country-level, weeks start Sunday)
+      **Ported from:** analysis notebook 'Jordan Information Environment - Comprehensive Analysis'
+    columns:
+      - name: week_start_date
+        description: Week start date (Sunday), primary key
+        tests:
+          - not_null
+          - unique
+
+      - name: year
+        description: Calendar year
+        tests:
+          - not_null
+
+      - name: week
+        description: Week number within the year
+        tests:
+          - not_null
+
+      - name: total_articles
+        description: Total GDELT article count for the week
+        tests:
+          - not_null
+
+      - name: avg_media_tone
+        description: Average GDELT media tone for the week
+
+      - name: avg_trend_score
+        description: Average Google Trends score across all search terms
+
+      - name: economic_search_intensity
+        description: Weekly average trend score for economic search terms (inflation, unemployment, economy, prices)
+
+      - name: total_events
+        description: Count of ACLED events this week
+        tests:
+          - not_null
+
+      - name: total_fatalities
+        description: Total event fatalities this week
+        tests:
+          - not_null
+
+      - name: affected_governorates
+        description: Distinct governorates with events this week
+        tests:
+          - not_null

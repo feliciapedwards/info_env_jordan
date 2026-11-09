@@ -26,10 +26,11 @@
 
 # DBTITLE 1,Create Unified Weekly Dataset
 # MAGIC %sql
-# MAGIC -- Create unified weekly dataset combining all 4 data sources
-# MAGIC CREATE OR REPLACE TABLE info_env_jordan.gold.unified_weekly_indicators
-# MAGIC COMMENT 'Unified weekly view: media, trends, events, and economic indicators'
-# MAGIC AS
+# MAGIC -- This table is now built by dbt: models/gold/unified_weekly_indicators.sql
+# MAGIC -- (run via the run_dbt notebook). This cell previews the dbt-built table
+# MAGIC -- instead of recreating it. Original creation SQL preserved below for reference.
+# MAGIC SELECT * FROM info_env_jordan.gold.unified_weekly_indicators
+# MAGIC /* Original notebook SQL (superseded by the dbt model):
 # MAGIC WITH weekly_spine AS (
 # MAGIC   SELECT DISTINCT 
 # MAGIC     DATE_TRUNC('WEEK', event_date + INTERVAL 1 DAY) - INTERVAL 1 DAY AS week_start_date,
@@ -103,6 +104,7 @@
 # MAGIC LEFT JOIN trends_weekly t ON s.week_start_date = t.week_start_date
 # MAGIC LEFT JOIN events_weekly e ON s.week_start_date = e.week_start_date
 # MAGIC ORDER BY s.week_start_date;
+# MAGIC */
 
 # COMMAND ----------
 
