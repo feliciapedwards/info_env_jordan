@@ -22,7 +22,7 @@ Bronze (raw ingestion)  →  Silver (cleaned, dbt)  →  Gold (thematic, monthly
 
 **Does economic hardship drive protests in Jordan, or do protests, media attention, and public searches drive economic outcomes?** We integrated conflict events (ACLED), Google search trends, media coverage (GDELT), and World Bank economic indicators (2021-2025) to find out.
 
-**The answer:** Protests, media coverage, and public searches form a **bidirectional feedback loop** with inflation — events appear to drive inflation at least as strongly as inflation drives events (r = 0.765 vs. r = 0.584), and this only becomes visible when protests are split by theme (economic vs. political) and analyzed monthly rather than mixed together quarterly. Full detail and caveats in [FINDINGS.md](FINDINGS.md).
+**The answer:** Protests, media coverage, and public searches correlation with inflation — events appear to drive inflation at least as strongly as inflation drives events (r = 0.765 vs. r = 0.584), and this only becomes visible when protests are split by theme (economic vs. political) and analyzed monthly rather than mixed together quarterly. Full detail and caveats in [FINDINGS.md](FINDINGS.md).
 
 ## Key findings
 
